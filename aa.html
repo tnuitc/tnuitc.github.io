@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>番茄鐘多功能工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 100%; margin: 0 auto; padding: 20px; }
+        h1, h2 { color: #333; }
+        .container { display: flex; justify-content: space-between; width: 100%; }
+        .left-column, .right-column { width: 48%; }
+        .timer, .todo, .youtube, .image-carousel, .wheel { margin-bottom: 20px; }
+        #time { font-size: 2em; margin: 10px 0; }
+        button { padding: 5px 10px; margin-right: 5px; }
+        input, select { margin-bottom: 10px; padding: 5px; }
+        #todo-list { list-style-type: none; padding: 0; }
+        #todo-list li { cursor: pointer; padding: 5px; margin: 5px 0; background-color: #f0f0f0; }
+        #todo-list li.done { text-decoration: line-through; background-color: #e0e0e0; }
+        #youtube-player { margin-top: 10px; }
+        .image-carousel { display: flex; justify-content: space-between; align-items: center; height: 300px; }
+        .image-carousel img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #wheel-container { width: 300px; height: 300px; position: relative; }
+        #wheel { width: 100%; height: 100%; border-radius: 50%; border: 10px solid #333; position: relative; overflow: hidden; }
+        #wheel-arrow { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent; border-top: 40px solid red; }
+        .wheel-number { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 24px; font-weight: bold; color: #000; }
+        #wheel-result { margin-top: 10px; font-size: 18px; font-weight: bold; }
+        .links { margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 5px; }
+        .links h2 { margin-top: 0; }
+        .links a { display: block; margin-bottom: 5px; color: #0066cc; text-decoration: none; }
+        .links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>番茄鐘多功能工具</h1>
+    <div class='container'>
+        <div class='left-column'>
+            <div class='timer'>
+                <h2>番茄鐘</h2>
+                <input type="number" id='timer-duration' min="1" max="60" value="25">
+                <label for="timer-duration">分鐘</label>
+                <div id='time'>25:00</div>
+                <button id='start-timer'>開始</button>
+                <button id='reset-timer'>重設</button>
+            </div>
+            <div class='wheel'>
+                <h2>抽號碼轉盤</h2>
+                <input type='text' id='wheel-range' placeholder='輸入範圍，例如：1-10'/>
+                <button id='confirm-wheel'>確認範圍</button>
+                <button id='spin-wheel'>轉動輪盤</button>
+                <div id='wheel-container'>
+                    <div id='wheel'></div>
+                    <div id='wheel-arrow'></div>
+                </div>
+                <div id='wheel-result'></div>
+            </div>
+        </div>
+        <div class='right-column'>
+            <div class='todo'>
+                <h2>待辦事項</h2>
+                <input type='text' id='new-todo' placeholder='添加新的待辦事項'/>
+                <button id='add-todo'>添加</button>
+                <ul id='todo-list'></ul>
+            </div>
+            <div class='youtube'>
+                <h2>YouTube 影片 (時間到自動播放)</h2>
+                <input type='text' id='youtube-link' placeholder='輸入YouTube影片連結'/>
+                <button id='confirm-youtube'>確認</button>
+                <div id='youtube-status'></div>
+                <div id='youtube-player'></div>
+            </div>
+            <div class='image-carousel'>
+                <img id='carousel-image' src='' alt='Carousel Image'>
+            </div>
+            <div>
+                <h2>圖片輪播</h2>
+                <textarea id='image-links' rows='5' placeholder='輸入1-10個圖片連結，每行一個'></textarea>
+                <button id='confirm-images'>確認圖片</button>
+            </div>
+        </div>
+    </div>
+    <div class='links'>
+        <h2>相關連結</h2>
+        <a href="https://www.parenting.com.tw/article/5095977" target="_blank">番茄鐘操作法</a>
+        <a href="https://www.parenting.com.tw/article/5067510" target="_blank">工作與記憶法</a>
+        <a href="https://www.youtube.com/channel/UCNJ52NEgvQHrqQvVSlP9Rsw" target="_blank">亮在這裡第一頻道</a>
+        <a href="https://www.youtube.com/@user-jy1bv5in5b" target="_blank">亮在這裡第二頻道</a>
+        <a href="https://www.facebook.com/iddmail?mibextid=ZbWKwL" target="_blank">亮的FB</a>
+    </div>
+    <script>
+        let timer;
+        let timeLeft;
+        let youtubeVideoId = null;
+        let imageLinks = [];
+        let currentImageIndex = 0;
+        let wheelNumbers = [];
+        const timeDisplay = document.getElementById('time');
+        const startButton = document.getElementById('start-timer');
+        const resetButton = document.getElementById('reset-timer');
+        const timerDuration = document.getElementById('timer-duration');
+        const todoInput = document.getElementById('new-todo');
+        const addTodoButton = document.getElementById('add-todo');
+        const todoList = document.getElementById('todo-list');
+        const youtubeLink = document.getElementById('youtube-link');
+        const youtubePlayer = document.getElementById('youtube-player');
+        const confirmYoutubeButton = document.getElementById('confirm-youtube');
+        const youtubeStatus = document.getElementById('youtube-status');
+        const imageLinksInput = document.getElementById('image-links');
+        const confirmImagesButton = document.getElementById('confirm-images');
+        const carouselImage = document.getElementById('carousel-image');
+        const wheelRangeInput = document.getElementById('wheel-range');
+        const confirmWheelButton = document.getElementById('confirm-wheel');
+        const spinWheelButton = document.getElementById('spin-wheel');
+        const wheelContainer = document.getElementById('wheel');
+        const wheelResult = document.getElementById('wheel-result');
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timeDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+
+        function startTimer() {
+            clearInterval(timer);
+            timeLeft = timerDuration.value * 60;
+            updateTimerDisplay();
+            timer = setInterval(() => {
+                if (timeLeft > 0) {
+                    timeLeft--;
+                    updateTimerDisplay();
+                } else {
+                    clearInterval(timer);
+                    playYoutubeVideo();
+                }
+            }, 1000);
+        }
+
+        function resetTimer() {
+            clearInterval(timer);
+            timeLeft = timerDuration.value * 60;
+            updateTimerDisplay();
+        }
+
+        function addTodo() {
+            const todoText = todoInput.value.trim();
+            if (todoText !== '') {
+                const li = document.createElement('li');
+                li.textContent = todoText;
+                li.addEventListener('click', () => li.classList.toggle('done'));
+                todoList.appendChild(li);
+                todoInput.value = '';
+            }
+        }
+
+        function confirmYoutubeLink() {
+            const link = youtubeLink.value;
+            const videoId = extractVideoId(link);
+            if (videoId) {
+                youtubeVideoId = videoId;
+                youtubeStatus.textContent = '影片連結已設置成功！';
+                youtubeLink.value = '';
+            } else {
+                youtubeStatus.textContent = '請輸入有效的YouTube影片連結';
+            }
+        }
+
+        function playYoutubeVideo() {
+            if (youtubeVideoId) {
+                youtubePlayer.innerHTML = `<iframe width="560" height="315" src="https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+            } else {
+                youtubeStatus.textContent = '未設置YouTube影片連結';
+            }
+        }
+
+        function extractVideoId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function confirmImages() {
+            const links = imageLinksInput.value.split('\n').filter(link => link.trim() !== '');
+            if (links.length > 0 && links.length <= 10) {
+                imageLinks = links;
+                currentImageIndex = 0;
+                updateImage();
+                startImageCarousel();
+            } else {
+                alert('請輸入1-10個有效的圖片連結');
+            }
+        }
+
+        function updateImage() {
+            carouselImage.src = imageLinks[currentImageIndex];
+        }
+
+        function startImageCarousel() {
+            setInterval(() => {
+                currentImageIndex = (currentImageIndex + 1) % imageLinks.length;
+                updateImage();
+            }, 10000);
+        }
+
+        function confirmWheelRange() {
+            const range = wheelRangeInput.value.split('-').map(Number);
+            if (range.length === 2 && range[0] < range[1]) {
+                wheelNumbers = Array.from({length: range[1] - range[0] + 1}, (_, i) => i + range[0]);
+                updateWheel();
+            } else {
+                alert('請輸入有效的範圍，例如：1-10');
+            }
+        }
+
+        function updateWheel() {
+            wheelContainer.innerHTML = '<div id="wheel-arrow"></div>';
+            const sliceAngle = 360 / wheelNumbers.length;
+            wheelNumbers.forEach((number, index) => {
+                const slice = document.createElement('div');
+                slice.style.position = 'absolute';
+                slice.style.width = '50%';
+                slice.style.height = '50%';
+                slice.style.transform = `rotate(${index * sliceAngle}deg)`;
+                slice.style.transformOrigin = '100% 100%';
+                slice.style.backgroundColor = `hsl(${index * 360 / wheelNumbers.length}, 70%, 70%)`;
+                
+                const numberElement = document.createElement('div');
+                numberElement.className = 'wheel-number';
+                numberElement.textContent = number;
+                numberElement.style.transform = `rotate(${-index * sliceAngle}deg)`;
+                
+                slice.appendChild(numberElement);
+                wheelContainer.appendChild(slice);
+            });
+        }
+
+        function spinWheel() {
+            if (wheelNumbers.length === 0) {
+                alert('請先設置輪盤範圍');
+                return;
+            }
+            const spins = 5 + Math.floor(Math.random() * 5);
+            const extraDegrees = Math.floor(Math.random() * 360);
+            const totalDegrees = spins * 360 + extraDegrees;
+            wheelContainer.style.transition = 'transform 5s cubic-bezier(0.25, 0.1, 0.25, 1)';
+            wheelContainer.style.transform = `rotate(${totalDegrees}deg)`;
+            
+            setTimeout(() => {
+                const resultIndex = Math.floor(wheelNumbers.length - (extraDegrees / 360) * wheelNumbers.length) % wheelNumbers.length;
+                wheelResult.innerHTML = `抽中的號碼: <span style="color: red;">${wheelNumbers[resultIndex]}</span>`;
+                wheelContainer.style.transition = 'none';
+                wheelContainer.style.transform = `rotate(${extraDegrees}deg)`;
+            }, 5000);
+        }
+
+        startButton.addEventListener('click', startTimer);
+        resetButton.addEventListener('click', resetTimer);
+        timerDuration.addEventListener('change', resetTimer);
+        addTodoButton.addEventListener('click', addTodo);
+        todoInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addTodo(); });
+        confirmYoutubeButton.addEventListener('click', confirmYoutubeLink);
+        confirmImagesButton.addEventListener('click', confirmImages);
+        confirmWheelButton.addEventListener('click', confirmWheelRange);
+        spinWheelButton.addEventListener('click', spinWheel);
+    </script>
+</body>
+</html>
